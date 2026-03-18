@@ -28,7 +28,7 @@ export interface Config {
 
 const defaults: Config = {
   llamaServerUrl: "http://localhost:11434/v1",
-  comfyUrl: "http://localhost:8188",
+  comfyUrl: "http://localhost:11820",
   model: "Qwen3-VL-8B-Instruct",
   sceneCount: 6,
   maxRetries: 2,

@@ -66,7 +66,7 @@ A web app that takes a one-sentence story idea, breaks it into scenes, generates
      ┌────────▼────────┐ ┌───────▼───────┐ ┌───────▼───────┐
      │  llama-cpp-     │ │   ComfyUI     │ │   WebSocket   │
      │  server         │ │   (localhost) │ │   / SSE       │
-     │  (Qwen3 VL 8B)  │ │   :8188       │ │   (live UI)   │
+     │  (Qwen3 VL 8B)  │ │   :11820      │ │   (live UI)   │
      │  :8080          │ │               │ │               │
      └─────────────────┘ └───────────────┘ └───────────────┘
 ```
@@ -118,7 +118,7 @@ Story idea: {IDEA}
 
 ### 4.2 ComfyUI Integration
 
-- **Endpoint:** `http://localhost:8188` (configurable)
+- **Endpoint:** `http://localhost:11820` (configurable)
 - **Method:** `POST /prompt` with workflow JSON; `GET /history/{prompt_id}` to poll
 - **Workflow:** z-image turbo workflow (square, landscape, portrait support)
 - **Prompt Node:** Configurable node ID for CLIPTextEncode injection
@@ -245,7 +245,7 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 ```json
 {
   "llama_server_url": "http://localhost:11434/v1",
-  "comfy_url": "http://localhost:8188",
+  "comfy_url": "http://localhost:11820",
   "model": "Qwen3-VL-8B",
   "scene_count": 6,
   "max_retries": 2,
@@ -259,7 +259,7 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 **Environment Variable Overrides:**
 ```bash
 LLAMA_SERVER_URL=http://localhost:11434/v1
-COMFY_URL=http://localhost:8188
+COMFY_URL=http://localhost:11820
 MODEL=Qwen3-VL-8B-Instruct
 SCENE_COUNT=6
 MAX_RETRIES=2
@@ -352,7 +352,7 @@ for (let take = 1; take <= MAX_RETRIES + 1; take++) {
 **Prerequisites:**
 - Node.js 18+
 - llama-server running with Qwen3-VL-8B-Instruct at `localhost:11434/v1`
-- ComfyUI running at localhost:8188
+- ComfyUI running at localhost:11820
 - z-image turbo workflow exported to `workflows/workflow_zimage_turbo.json`
 
 ```bash
