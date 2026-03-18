@@ -10,8 +10,10 @@ AGENTS.md
 node_modules/
 dist/
 build/
+.next/
 .env
 .env.*
+!.env.local.example
 
 # Common ignores
 .ipynb_checkpoints/
