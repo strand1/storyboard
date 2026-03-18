@@ -34,7 +34,7 @@ const defaults: Config = {
   maxRetries: 2,
   stylePrefix: "cinematic still, 4k, detailed, sharp focus,",
   workflowFile: "workflows/workflow_zimage_turbo.json",
-  promptNodeId: "3",
+  promptNodeId: "70",
   outputDir: "output",
 };
 
