@@ -19,6 +19,5 @@ build/
 .ipynb_checkpoints/
 *.ipynb
 
-# Generated output (keep the directory, ignore contents)
-public/output/projects/*
-!public/output/.gitkeep
+# Generated output
+public/output/
