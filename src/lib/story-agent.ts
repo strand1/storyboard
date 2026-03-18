@@ -64,12 +64,20 @@ No markdown, no explanation, just the JSON array.`,
   });
 
   // Validate and normalize scenes
-  const validatedScenes = scenes.map((scene, index) => ({
-    ...scene,
-    scene_id: scene.scene_id ?? index + 1,
-    shot_type: validateShotType(scene.shot_type),
-    comfy_prompt: `${stylePrefix} ${scene.comfy_prompt}`,
-  }));
+  const validatedScenes = scenes.map((scene, index) => {
+    // Check if style prefix is already in the prompt (LLM sometimes includes it)
+    let comfyPrompt = scene.comfy_prompt;
+    if (!comfyPrompt.toLowerCase().includes(stylePrefix.toLowerCase().slice(0, 20))) {
+      comfyPrompt = `${stylePrefix} ${comfyPrompt}`;
+    }
+    
+    return {
+      ...scene,
+      scene_id: scene.scene_id ?? index + 1,
+      shot_type: validateShotType(scene.shot_type),
+      comfy_prompt: comfyPrompt,
+    };
+  });
 
   return {
     story_idea: storyIdea,
