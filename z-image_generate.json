@@ -72,8 +72,8 @@
   },
   "67": {
     "inputs": {
-      "width": 1280,
-      "height": 720,
+      "width": 1024,
+      "height": 576,
       "batch_size": 1
     },
     "class_type": "EmptySD3LatentImage",
@@ -84,7 +84,7 @@
   "68": {
     "inputs": {
       "seed": 24,
-      "steps": 8,
+      "steps": 4,
       "cfg": 1,
       "sampler_name": "euler_ancestral",
       "scheduler": "beta",
