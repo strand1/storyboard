@@ -27,6 +27,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Generate project name from story idea
+    const { generateProjectName } = await import("@/lib/projects");
+    const projectName = generateProjectName(storyIdea);
+
     // Create a ReadableStream for SSE
     const stream = new ReadableStream({
       async start(controller) {
@@ -48,6 +52,7 @@ export async function POST(request: NextRequest) {
           sendEvent("connected", {
             message: "Generation started",
             storyIdea,
+            projectName,
             timestamp: new Date().toISOString(),
           });
 

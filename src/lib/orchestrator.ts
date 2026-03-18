@@ -10,6 +10,7 @@ import { generateStoryBreakdown, type Scene, type StoryBreakdown } from "./story
 import { comfyuiGenerate, type ComfyUIImage } from "./comfyui";
 import { visionCheck, type VisionResult, type SceneWithResult } from "./vision-agent";
 import { getConfig } from "./config";
+import { generateProjectName, saveProject, markProjectGenerating } from "./projects";
 
 export type OrchestratorEvent =
   | { type: "story_start"; story_idea: string }
@@ -36,6 +37,7 @@ export interface GenerationResult {
   started_at: string;
   completed_at: string;
   status: "complete" | "partial" | "failed";
+  project_name: string;
 }
 
 /**
@@ -51,8 +53,12 @@ export async function generateStoryboard(
 
   const startedAt = new Date().toISOString();
   const scenes: SceneWithResult[] = [];
+  const projectName = generateProjectName(storyIdea);
 
   try {
+    // Mark project as generating (for interrupted run detection)
+    await markProjectGenerating(projectName, storyIdea);
+
     // Emit start event
     await emit(onEvent, { type: "story_start", story_idea: storyIdea });
 
@@ -83,12 +89,16 @@ export async function generateStoryboard(
 
     await emit(onEvent, { type: "generation_complete", scenes });
 
+    // Save project to disk
+    await saveProject(projectName, scenes, storyIdea, startedAt, completedAt);
+
     return {
       story_idea: storyIdea,
       scenes,
       started_at: startedAt,
       completed_at: completedAt,
       status,
+      project_name: projectName,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -100,6 +110,7 @@ export async function generateStoryboard(
       started_at: startedAt,
       completed_at: new Date().toISOString(),
       status: "failed",
+      project_name: projectName,
     };
   }
 }

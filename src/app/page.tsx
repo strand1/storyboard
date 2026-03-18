@@ -1,14 +1,22 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { StoryInputForm } from "@/components/StoryInputForm";
 import { StoryboardGrid, type Scene } from "@/components/StoryboardGrid";
 import { LiveStatusIndicator } from "@/components/LiveStatusIndicator";
 import { StatusBadge, type StatusType } from "@/components/StatusBadge";
+import { ProjectSidebar, type ProjectSummary } from "@/components/ProjectSidebar";
+import { InterruptedWarning } from "@/components/InterruptedWarning";
+
+// Helper to humanize project names (client-side copy)
+function humanizeProjectName(name: string): string {
+  return name.replace(/-/g, " ");
+}
 
 interface StreamEvent {
   type: string;
   story_idea?: string;
+  projectName?: string;
   breakdown?: {
     scenes: any[];
   };
@@ -22,6 +30,7 @@ interface StreamEvent {
   result?: {
     scenes: Scene[];
     status: string;
+    project_name: string;
   };
   message?: string;
 }
@@ -33,6 +42,57 @@ export default function Home() {
   const [currentScene, setCurrentScene] = useState(0);
   const [totalScenes, setTotalScenes] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  
+  // Project state
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [interruptedProject, setInterruptedProject] = useState<ProjectSummary | null>(null);
+  const [dismissedInterrupted, setDismissedInterrupted] = useState(false);
+
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  async function loadProjects() {
+    try {
+      setIsLoadingProjects(true);
+      const response = await fetch("/api/projects");
+      const data = await response.json();
+      setProjects(data);
+
+      // Check for interrupted projects
+      const interrupted = data.find((p: ProjectSummary) => p.status === "generating");
+      if (interrupted && !dismissedInterrupted) {
+        setInterruptedProject(interrupted);
+      }
+
+      // Load most recent project if none active
+      if (data.length > 0 && !activeProject) {
+        await loadProject(data[0].project_name);
+      }
+    } catch (error) {
+      console.error("Failed to load projects:", error);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }
+
+  async function loadProject(projectName: string) {
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}`);
+      if (response.ok) {
+        const project = await response.json();
+        setScenes(project.scenes || []);
+        setStoryIdea(project.story_idea || project.idea || "");
+        setActiveProject(projectName);
+        setGenerationStatus("complete");
+      }
+    } catch (error) {
+      console.error("Failed to load project:", error);
+    }
+  }
 
   const handleGenerate = useCallback(async (idea: string) => {
     setStoryIdea(idea);
@@ -110,6 +170,12 @@ export default function Home() {
     console.log("Event:", eventType, data);
 
     switch (eventType) {
+      case "connected":
+        if (data.projectName) {
+          setActiveProject(data.projectName);
+        }
+        break;
+
       case "story_complete":
         if (data.breakdown?.scenes) {
           const initialScenes: Scene[] = data.breakdown.scenes.map((s: any) => ({
@@ -181,6 +247,10 @@ export default function Home() {
         if (data.result?.scenes) {
           setScenes(data.result.scenes);
           setGenerationStatus("complete");
+          if (data.result.project_name) {
+            setActiveProject(data.result.project_name);
+            loadProjects(); // Refresh sidebar
+          }
         }
         break;
 
@@ -191,67 +261,115 @@ export default function Home() {
     }
   };
 
+  const handleSelectProject = (projectName: string) => {
+    loadProject(projectName);
+  };
+
+  const handleDismissInterrupted = () => {
+    setDismissedInterrupted(true);
+    setInterruptedProject(null);
+  };
+
+  const handleViewPartial = () => {
+    if (interruptedProject) {
+      loadProject(interruptedProject.project_name);
+      setDismissedInterrupted(true);
+      setInterruptedProject(null);
+    }
+  };
+
   const passedCount = scenes.filter((s) => s.status === "pass").length;
   const reviewCount = scenes.filter((s) => s.status === "needs_review").length;
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Storyboard</h1>
-          <p className="text-muted-foreground">
-            Turn your story ideas into visual storyboards with AI
-          </p>
-        </header>
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <ProjectSidebar
+        projects={projects}
+        activeProject={activeProject}
+        onSelectProject={handleSelectProject}
+        isLoading={isLoadingProjects}
+      />
 
-        {/* Input Form */}
-        <section className="mb-8">
-          <StoryInputForm
-            onSubmit={handleGenerate}
-            disabled={generationStatus === "generating"}
-            defaultValue={storyIdea || undefined}
-          />
-        </section>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mb-8 p-4 rounded-lg border border-red-500/20 bg-red-500/10">
-            <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Live Status */}
-        <LiveStatusIndicator
-          status={generationStatus}
-          currentScene={currentScene}
-          totalScenes={totalScenes}
-          passedCount={passedCount}
-          reviewCount={reviewCount}
-          className="mb-6"
-        />
-
-        {/* Storyboard Grid */}
-        {scenes.length > 0 && (
-          <section>
-            <StoryboardGrid scenes={scenes} />
-          </section>
-        )}
-
-        {/* Empty State */}
-        {generationStatus === "idle" && scenes.length === 0 && (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🎬</div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">
-              Ready to Create
-            </h2>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Enter a story idea above and watch as AI breaks it into scenes,
-              generates images, and creates your visual storyboard.
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="container mx-auto px-4 py-8 max-w-7xl">
+          {/* Header */}
+          <header className="mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                {activeProject && (
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Project: {humanizeProjectName(activeProject)}
+                  </p>
+                )}
+                <h1 className="text-4xl font-bold text-foreground">Storyboard</h1>
+              </div>
+            </div>
+            <p className="text-muted-foreground mt-2">
+              Turn your story ideas into visual storyboards with AI
             </p>
-          </div>
-        )}
-      </div>
-    </main>
+          </header>
+
+          {/* Interrupted Warning */}
+          {interruptedProject && !dismissedInterrupted && (
+            <InterruptedWarning
+              projectName={humanizeProjectName(interruptedProject.project_name)}
+              idea={interruptedProject.idea}
+              onDismiss={handleDismissInterrupted}
+              onViewPartial={handleViewPartial}
+              className="mb-6"
+            />
+          )}
+
+          {/* Input Form */}
+          <section className="mb-8">
+            <StoryInputForm
+              onSubmit={handleGenerate}
+              disabled={generationStatus === "generating"}
+              defaultValue={storyIdea || undefined}
+            />
+          </section>
+
+          {/* Error Display */}
+          {error && (
+            <div className="mb-8 p-4 rounded-lg border border-red-500/20 bg-red-500/10">
+              <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Live Status */}
+          <LiveStatusIndicator
+            status={generationStatus}
+            currentScene={currentScene}
+            totalScenes={totalScenes}
+            passedCount={passedCount}
+            reviewCount={reviewCount}
+            className="mb-6"
+          />
+
+          {/* Storyboard Grid */}
+          {scenes.length > 0 && (
+            <section>
+              <StoryboardGrid scenes={scenes} />
+            </section>
+          )}
+
+          {/* Empty State */}
+          {generationStatus === "idle" && scenes.length === 0 && (
+            <div className="text-center py-16">
+              <div className="text-6xl mb-4">🎬</div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                Ready to Create
+              </h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Enter a story idea above and watch as AI breaks it into scenes,
+                generates images, and creates your visual storyboard.
+              </p>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
