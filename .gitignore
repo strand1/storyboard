@@ -1,0 +1,18 @@
+# Tool infrastructure
+.pi/
+.sapling/
+
+# Agent infrastructure (user opted out of tracking)
+AGENTS.md
+.mulch/
+
+# Language / framework specific
+node_modules/
+dist/
+build/
+.env
+.env.*
+
+# Common ignores
+.ipynb_checkpoints/
+*.ipynb
