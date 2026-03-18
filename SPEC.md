@@ -5,7 +5,7 @@
 
 ## Overview
 
-A local Next.js web app that orchestrates llama-cpp-server and ComfyUI to turn a one-line story idea into a visual storyboard. The app provides a browser UI with live generation status and a storyboard grid view. Everything runs locally — no cloud services.
+A local Next.js web app that orchestrates llama-server and ComfyUI to turn a one-line story idea into a visual storyboard. The app provides a browser UI with live generation status and a storyboard grid view. Everything runs locally — no cloud services.
 
 ---
 
@@ -74,7 +74,7 @@ A web app that takes a one-sentence story idea, breaks it into scenes, generates
 ### Pipeline Flow
 
 1. User submits story idea via web form
-2. API route calls llama-cpp-server to generate scene breakdown (4–6 scenes)
+2. API route calls llama-server to generate scene breakdown (4–6 scenes)
 3. For each scene:
    - Inject prompt into ComfyUI workflow
    - POST to ComfyUI `/prompt` endpoint
@@ -91,8 +91,8 @@ A web app that takes a one-sentence story idea, breaks it into scenes, generates
 
 ### 4.1 Story Generator (Text LLM)
 
-- **Model:** Configurable via `config.json` or env var (default: `Qwen3-VL-8B`)
-- **Endpoint:** llama-cpp-server (configurable URL)
+- **Model:** Configurable via `config.json` or env var (default: `Qwen3-VL-8B-Instruct`)
+- **Endpoint:** llama-server at `http://localhost:11434/v1` (OpenAI-compatible API)
 - **Input:** User idea + style prefix + scene count (default 6)
 - **Output:** JSON array of scene objects
 
@@ -244,7 +244,7 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 ### 5.3 Config (`config.json` or env vars)
 ```json
 {
-  "llama_server_url": "http://localhost:8080",
+  "llama_server_url": "http://localhost:11434/v1",
   "comfy_url": "http://localhost:8188",
   "model": "Qwen3-VL-8B",
   "scene_count": 6,
@@ -258,9 +258,9 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 
 **Environment Variable Overrides:**
 ```bash
-LLAMA_SERVER_URL=http://localhost:8080
+LLAMA_SERVER_URL=http://localhost:11434/v1
 COMFY_URL=http://localhost:8188
-MODEL=Qwen3-VL-8B
+MODEL=Qwen3-VL-8B-Instruct
 SCENE_COUNT=6
 MAX_RETRIES=2
 ```
@@ -351,7 +351,7 @@ for (let take = 1; take <= MAX_RETRIES + 1; take++) {
 
 **Prerequisites:**
 - Node.js 18+
-- llama-cpp-server running with Qwen3 VL 8B
+- llama-server running with Qwen3-VL-8B-Instruct at `localhost:11434/v1`
 - ComfyUI running at localhost:8188
 - z-image turbo workflow exported to `workflows/workflow_zimage_turbo.json`
 
