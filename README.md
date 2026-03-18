@@ -18,6 +18,22 @@ Everything runs locally — no cloud services.
 
 ---
 
+## Screenshots
+
+### System Flow
+
+![System Flow](assets/flow.png)
+
+### Storyboard Grid — Light Mode
+
+![Storyboard Light Mode](assets/storyboard-light.png)
+
+### Storyboard Grid — Dark Mode
+
+![Storyboard Dark Mode](assets/storyboard-dark.png)
+
+---
+
 ## Prerequisites
 
 ### 1. Node.js 18+
