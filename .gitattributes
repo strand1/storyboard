@@ -1,0 +1,2 @@
+.sapling/session.jsonl merge=union
+.mulch/expertise/*.jsonl merge=union
