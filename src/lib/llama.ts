@@ -165,16 +165,24 @@ function extractJsonFromResponse(text: string): string {
   // Remove markdown code fences if present
   let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
   
-  // Try to find JSON array or object (greedy match to get complete structure)
-  // Match arrays first (for scene lists), then objects
-  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
-  if (arrayMatch) {
-    return arrayMatch[0];
-  }
-  
+  // Try to find JSON object FIRST (most common case for single responses)
+  // This must come before array matching to avoid matching nested [] inside objects
   const objectMatch = cleaned.match(/\{[\s\S]*\}/);
   if (objectMatch) {
     return objectMatch[0];
+  }
+  
+  // Match top-level arrays (for scene lists) - must start at beginning or after whitespace
+  // Use a more specific pattern that requires content or proper array structure
+  const arrayMatch = cleaned.match(/^\s*(\[[\s\S]*\])\s*$/);
+  if (arrayMatch) {
+    return arrayMatch[1];
+  }
+  
+  // Fallback: try to find any array (but only if it's substantial, not just [])
+  const anyArrayMatch = cleaned.match(/\[[\s\S]{2,}\]/);
+  if (anyArrayMatch) {
+    return anyArrayMatch[0];
   }
   
   return cleaned.trim();
