@@ -7,6 +7,7 @@ import { LiveStatusIndicator } from "@/components/LiveStatusIndicator";
 import { StatusBadge, type StatusType } from "@/components/StatusBadge";
 import { ProjectSidebar, type ProjectSummary } from "@/components/ProjectSidebar";
 import { InterruptedWarning } from "@/components/InterruptedWarning";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 // Helper to humanize project names (client-side copy)
 function humanizeProjectName(name: string): string {
@@ -378,6 +379,7 @@ export default function Home() {
                 )}
                 <h1 className="text-4xl font-bold text-foreground">Storyboard</h1>
               </div>
+              <ThemeToggle />
             </div>
             <p className="text-muted-foreground mt-2">
               Turn your story ideas into visual storyboards with AI
