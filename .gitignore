@@ -18,3 +18,7 @@ build/
 # Common ignores
 .ipynb_checkpoints/
 *.ipynb
+
+# Generated output (keep the directory, ignore contents)
+public/output/projects/*
+!public/output/.gitkeep
