@@ -3,6 +3,8 @@
 import { cn } from "@/lib/utils";
 import { SceneCard, type Scene } from "./SceneCard";
 
+export type { Scene };
+
 interface StoryboardGridProps {
   scenes: Scene[];
   className?: string;

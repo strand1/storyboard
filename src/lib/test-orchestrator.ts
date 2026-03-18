@@ -93,7 +93,7 @@ async function runTests(): Promise<void> {
 
     const result = await processSingleScene(scene, {
       maxRetries: 1,
-      onEvent: (e) => events.push(e.type),
+      onEvent: (e) => { events.push(e.type); },
     });
     const duration = Date.now() - startTime;
 
