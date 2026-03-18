@@ -102,7 +102,8 @@ You are a storyboard writer. Given a story idea, break it into {N} scenes.
 For each scene output a JSON object with these fields:
   scene_id     : integer (1-based)
   description  : one sentence describing what happens
-  subject      : main subject or character
+  subject      : JSON array of ALL required subjects that must appear in the image
+                 (e.g. ["alien", "fox"] or ["astronaut"] for single-subject scenes)
   action       : what the subject is doing
   mood         : emotional tone (e.g. tense, joyful, eerie)
   shot_type    : one of [wide, medium, close-up, overhead]
@@ -122,11 +123,12 @@ Story idea: {IDEA}
 - **Method:** `POST /prompt` with workflow JSON; `GET /history/{prompt_id}` to poll
 - **Workflow:** z-image turbo workflow (square, landscape, portrait support)
 - **Prompt Node:** Configurable node ID for CLIPTextEncode injection
+- **Steps:** Controlled by step ladder in config (adaptive quality on retry)
 
 **Workflow Structure:**
 ```json
 {
-  "3": { "class_type": "CLIPTextEncode", "inputs": { "text": "{INJECT_HERE}" } },
+  "3": { "class_type": "CLIPTextEncode", "inputs": { "text": "{INJECT_HERE}", "steps": 4 } },
   "4": { "class_type": "CLIPTextEncode", "inputs": { "text": "negative prompt" } },
   "5": { "class_type": "KSampler", ... },
   "6": { "class_type": "VAEDecode", ... },
@@ -150,26 +152,29 @@ output/scene_02_take_2.png   ← after retry
 **Vision Prompt:**
 ```
 Given this scene spec:
-  Subject:   {subject}
+  Required subjects: {subjects_list}   ← e.g. "alien, fox"
   Action:    {action}
   Mood:      {mood}
   Shot type: {shot_type}
 
 Look at the attached image and answer:
-  subject_ok   : true/false — is the main subject visible and correct?
+  subjects_ok  : true ONLY if ALL required subjects are clearly visible.
+                 If any single subject is missing, this is false.
   mood_ok      : true/false — does the lighting/color match the mood?
   shot_ok      : true/false — does the framing match the shot type?
 
-If any is false, write a short prompt_fix string (max 15 words) describing
-only what needs to change. Otherwise set prompt_fix to null.
+If subjects_ok is false, list which subjects are missing in missing_subjects.
+If mood_ok or shot_ok is false, describe what needs to change.
+Set prompt_fix to null only if all three are true.
 
 Return ONLY JSON. No explanation.
 ```
 
 **Retry Logic:**
-- Max 2 retries per scene
+- Max 2 retries per scene (configurable)
 - If any check fails: append `prompt_fix` to original `comfy_prompt` (never discard)
 - If retries exhausted: mark as `needs_review` and continue
+- Step count increases on each retry per step ladder
 
 ### 4.4 Live Status (WebSocket / SSE)
 
@@ -202,6 +207,7 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 | `SceneCard` | Individual scene: image, description, status badge |
 | `StatusBadge` | Color-coded: generating (yellow), pass (green), needs_review (red) |
 | `LiveStatusIndicator` | Shows overall generation progress |
+| `SceneLightbox` | Full-screen image viewer with prompt editing and controls |
 
 ---
 
@@ -212,24 +218,77 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 {
   "scene_id": 1,
   "description": "A lone astronaut stands at the edge of a crater at sunset.",
-  "subject": "astronaut",
+  "subject": ["astronaut"],
   "action": "standing, looking out",
   "mood": "contemplative",
   "shot_type": "wide",
-  "comfy_prompt": "cinematic still, wide shot, lone astronaut at crater edge, golden hour...",
+  "original_comfy_prompt": "cinematic still, wide shot, lone astronaut at crater edge, golden hour...",
+  "comfy_prompt": "cinematic still, wide shot, lone astronaut at crater edge, golden hour..., Make astronaut more prominent",
   "image_path": "/output/scene_01_take_2.png",
   "take": 2,
+  "steps": 6,
   "status": "pass",
+  "manually_approved": false,
+  "takes": [
+    {
+      "take": 1,
+      "steps": 4,
+      "prompt": "cinematic still, wide shot, ...",
+      "image_path": "scene_01_take_1.png",
+      "vision_result": {
+        "subjects_ok": false,
+        "missing_subjects": [],
+        "mood_ok": true,
+        "shot_ok": false,
+        "prompt_fix": "Make astronaut more prominent"
+      }
+    },
+    {
+      "take": 2,
+      "steps": 6,
+      "prompt": "cinematic still, wide shot, ..., Make astronaut more prominent",
+      "image_path": "scene_01_take_2.png",
+      "vision_result": {
+        "subjects_ok": true,
+        "missing_subjects": [],
+        "mood_ok": true,
+        "shot_ok": true,
+        "prompt_fix": null
+      }
+    }
+  ]
+}
+```
+
+### 5.2 Vision Result
+```json
+{
+  "subjects_ok": true,
+  "missing_subjects": [],
+  "mood_ok": true,
+  "shot_ok": true,
+  "prompt_fix": null
+}
+```
+
+### 5.3 Take Object
+```json
+{
+  "take": 1,
+  "steps": 4,
+  "prompt": "cinematic still, wide shot, ...",
+  "image_path": "scene_01_take_1.png",
   "vision_result": {
-    "subject_ok": true,
+    "subjects_ok": false,
+    "missing_subjects": ["alien"],
     "mood_ok": true,
     "shot_ok": true,
-    "prompt_fix": null
+    "prompt_fix": "Make alien more prominent and visible"
   }
 }
 ```
 
-### 5.2 Generation Session
+### 5.4 Generation Session
 ```json
 {
   "session_id": "uuid",
@@ -241,14 +300,15 @@ data: {"total_scenes": 6, "passed": 5, "needs_review": 1}
 }
 ```
 
-### 5.3 Config (`config.json` or env vars)
+### 5.5 Config (`config.json` or env vars)
 ```json
 {
   "llama_server_url": "http://localhost:11434/v1",
   "comfy_url": "http://localhost:11820",
-  "model": "Qwen3-VL-8B",
+  "model": "Qwen3-VL-8B-Instruct",
   "scene_count": 6,
   "max_retries": 2,
+  "step_ladder": [4, 6, 8],
   "style_prefix": "cinematic still, 4k, detailed, sharp focus,",
   "workflow_file": "workflow_zimage_turbo.json",
   "prompt_node_id": "3",
@@ -285,14 +345,17 @@ storyboard/
 │   ├── StoryInputForm.tsx
 │   ├── StoryboardGrid.tsx
 │   ├── SceneCard.tsx
+│   ├── SceneLightbox.tsx
 │   ├── StatusBadge.tsx
-│   └── LiveStatusIndicator.tsx
+│   ├── LiveStatusIndicator.tsx
+│   └── InterruptedWarning.tsx
 ├── lib/
 │   ├── config.ts                 # Config loading (env + config.json)
 │   ├── llama.ts                  # llama-cpp-server client
 │   ├── comfyui.ts                # ComfyUI client
 │   ├── vision.ts                 # Vision check logic
 │   ├── orchestrator.ts           # Main pipeline orchestration
+│   ├── story-agent.ts            # Story breakdown generation
 │   └── workflow.ts               # Workflow template loading/injection
 ├── public/
 │   └── output/                   # Generated images
@@ -326,8 +389,11 @@ storyboard/
 ## 8. Retry Logic
 
 ```typescript
+const stepLadder = [4, 6, 8];
+
 for (let take = 1; take <= MAX_RETRIES + 1; take++) {
-  const image = await comfyui.generate(currentPrompt);
+  const steps = stepLadder[Math.min(take - 1, stepLadder.length - 1)];
+  const image = await comfyui.generate(currentPrompt, steps);
   const result = await visionCheck(image, sceneSpec);
   
   if (result.allPass) {
@@ -335,7 +401,7 @@ for (let take = 1; take <= MAX_RETRIES + 1; take++) {
     break;
   } else if (take <= MAX_RETRIES) {
     currentPrompt = originalPrompt + ", " + result.promptFix;
-    emitEvent({ type: "scene_retry", scene_id, take: take + 1 });
+    emitEvent({ type: "scene_retry", scene_id, take: take + 1, steps });
   } else {
     scene.status = "needs_review";
     break;

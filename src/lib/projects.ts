@@ -103,15 +103,6 @@ export async function saveProject(
   // Write scenes.json
   const scenesPath = path.join(projectDir, "scenes.json");
   await fs.writeFile(scenesPath, JSON.stringify(project, null, 2));
-
-  // Move images from temp location to project folder
-  for (const scene of scenes) {
-    if (scene.image_base64 && scene.image_path) {
-      const imagePath = path.join(projectDir, scene.image_path);
-      const imageBuffer = Buffer.from(scene.image_base64, "base64");
-      await fs.writeFile(imagePath, imageBuffer);
-    }
-  }
 }
 
 /**
@@ -197,6 +188,33 @@ export async function getProject(name: string): Promise<Project | null> {
   } catch (error) {
     return null;
   }
+}
+
+/**
+ * Update a project's scenes
+ */
+export async function updateProjectScenes(
+  projectName: string,
+  scenes: SceneWithResult[]
+): Promise<void> {
+  const projectDir = getProjectDir(projectName);
+  const scenesPath = path.join(projectDir, "scenes.json");
+  
+  const content = await fs.readFile(scenesPath, "utf-8");
+  const project: Project = JSON.parse(content);
+  
+  // Update status based on scenes
+  const passedCount = scenes.filter((s) => s.status === "pass").length;
+  const reviewCount = scenes.filter((s) => s.status === "needs_review").length;
+  
+  const updatedProject = {
+    ...project,
+    scenes,
+    status: reviewCount > 0 ? "needs_review" : "complete",
+    completed_at: new Date().toISOString(),
+  };
+  
+  await fs.writeFile(scenesPath, JSON.stringify(updatedProject, null, 2));
 }
 
 /**

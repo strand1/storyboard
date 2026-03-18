@@ -55,7 +55,7 @@ async function runTests(): Promise<void> {
     const testScene = {
       scene_id: 1,
       description: "A woman with blonde hair in an urban setting",
-      subject: "woman with blonde hair",
+      subject: ["woman with blonde hair"],
       action: "looking at camera",
       mood: "serious",
       shot_type: "medium" as const,
@@ -66,7 +66,7 @@ async function runTests(): Promise<void> {
     const duration = Date.now() - startTime;
 
     console.log(`  ✓ PASS (${duration}ms)`);
-    console.log(`    subject:${result.subject_ok} mood:${result.mood_ok} shot:${result.shot_ok} all:${result.all_pass}`);
+    console.log(`    subjects:${result.subjects_ok} mood:${result.mood_ok} shot:${result.shot_ok} all:${result.all_pass}`);
     passed++;
   } catch (error) {
     console.log(`  ✗ FAIL`);
@@ -84,7 +84,7 @@ async function runTests(): Promise<void> {
     const scene = {
       scene_id: 1,
       description: "A serene landscape with mountains and lake at sunset",
-      subject: "mountains and lake",
+      subject: ["mountains", "lake"],
       action: "reflecting sunset colors",
       mood: "serene",
       shot_type: "wide" as const,

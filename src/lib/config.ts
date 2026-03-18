@@ -16,6 +16,8 @@ export interface Config {
   sceneCount: number;
   // Maximum retry attempts per scene
   maxRetries: number;
+  // Step ladder for adaptive quality on retry [draft, medium, high]
+  stepLadder: number[];
   // Style prefix prepended to all ComfyUI prompts
   stylePrefix: string;
   // ComfyUI workflow file path (relative to project root)
@@ -32,6 +34,7 @@ const defaults: Config = {
   model: "Qwen3-VL-8B-Instruct",
   sceneCount: 6,
   maxRetries: 2,
+  stepLadder: [4, 6, 8],
   stylePrefix: "cinematic still, 4k, detailed, sharp focus,",
   workflowFile: "workflows/workflow_zimage_turbo.json",
   promptNodeId: "70",
@@ -61,6 +64,7 @@ export function getConfig(): Config {
     model: getEnvVar("MODEL") ?? defaults.model,
     sceneCount: getEnvVarAsInt("SCENE_COUNT", defaults.sceneCount),
     maxRetries: getEnvVarAsInt("MAX_RETRIES", defaults.maxRetries),
+    stepLadder: defaults.stepLadder, // Could be made configurable via env if needed
     stylePrefix: getEnvVar("STYLE_PREFIX") ?? defaults.stylePrefix,
     workflowFile: getEnvVar("WORKFLOW_FILE") ?? defaults.workflowFile,
     promptNodeId: getEnvVar("PROMPT_NODE_ID") ?? defaults.promptNodeId,
@@ -75,6 +79,7 @@ export const comfyUrl = config.comfyUrl;
 export const model = config.model;
 export const sceneCount = config.sceneCount;
 export const maxRetries = config.maxRetries;
+export const stepLadder = config.stepLadder;
 export const stylePrefix = config.stylePrefix;
 export const workflowFile = config.workflowFile;
 export const promptNodeId = config.promptNodeId;

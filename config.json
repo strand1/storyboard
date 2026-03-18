@@ -1,0 +1,12 @@
+{
+  "step_ladder": [4, 6, 8],
+  "max_retries": 2,
+  "scene_count": 6,
+  "style_prefix": "cinematic still, 4k, detailed, sharp focus,",
+  "model": "Qwen3-VL-8B-Instruct",
+  "llama_server_url": "http://localhost:11434/v1",
+  "comfy_url": "http://localhost:11820",
+  "workflow_file": "workflows/workflow_zimage_turbo.json",
+  "prompt_node_id": "70",
+  "output_dir": "output"
+}

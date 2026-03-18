@@ -8,17 +8,17 @@
 
 import { generateStoryBreakdown, type Scene, type StoryBreakdown } from "./story-agent";
 import { comfyuiGenerate, type ComfyUIImage } from "./comfyui";
-import { visionCheck, type VisionResult, type SceneWithResult } from "./vision-agent";
+import { visionCheck, type VisionResult, type SceneWithResult, type Take } from "./vision-agent";
 import { getConfig } from "./config";
-import { generateProjectName, saveProject, markProjectGenerating } from "./projects";
+import { generateProjectName, saveProject, markProjectGenerating, getProjectDir } from "./projects";
 
 export type OrchestratorEvent =
   | { type: "story_start"; story_idea: string }
   | { type: "story_complete"; breakdown: StoryBreakdown }
   | { type: "scene_start"; scene_id: number; total_scenes: number }
-  | { type: "scene_generate"; scene_id: number; take: number; prompt: string }
+  | { type: "scene_generate"; scene_id: number; take: number; steps: number; seed: number; prompt: string }
   | { type: "scene_complete"; scene_id: number; status: "pass" | "needs_review" }
-  | { type: "scene_retry"; scene_id: number; take: number; reason: string }
+  | { type: "scene_retry"; scene_id: number; take: number; steps?: number; seed?: number; reason: string }
   | { type: "generation_complete"; scenes: SceneWithResult[] }
   | { type: "error"; message: string; scene_id?: number };
 
@@ -70,9 +70,12 @@ export async function generateStoryboard(
 
     await emit(onEvent, { type: "story_complete", breakdown });
 
+    // Get project directory for saving images
+    const projectDir = getProjectDir(projectName);
+
     // Process each scene
     for (const scene of breakdown.scenes) {
-      const sceneResult = await processScene(scene, maxRetries, onEvent);
+      const sceneResult = await processScene(scene, maxRetries, onEvent, projectDir);
       scenes.push(sceneResult);
     }
 
@@ -121,11 +124,15 @@ export async function generateStoryboard(
 async function processScene(
   scene: Scene,
   maxRetries: number,
-  onEvent?: EventHandler
+  onEvent?: EventHandler,
+  projectDir?: string
 ): Promise<SceneWithResult> {
+  const config = getConfig();
+  const path = await import("path");
   const totalScenes = 1; // We don't know total here, pass from caller if needed
   let currentPrompt = scene.comfy_prompt;
   let originalPrompt = scene.comfy_prompt;
+  const takes: Take[] = [];
 
   await emit(onEvent, {
     type: "scene_start",
@@ -135,31 +142,65 @@ async function processScene(
 
   for (let take = 1; take <= maxRetries + 1; take++) {
     try {
+      // Get step count from step ladder (clamp to last value if exceeded)
+      const steps = config.stepLadder[Math.min(take - 1, config.stepLadder.length - 1)];
+      
+      // Generate random seed for this take (0 to 2^32 - 1)
+      const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+
       // Emit generation event
       await emit(onEvent, {
         type: "scene_generate",
         scene_id: scene.scene_id,
         take,
+        steps,
+        seed,
         prompt: currentPrompt,
       });
 
-      // Generate image
-      const image = await comfyuiGenerate(currentPrompt);
+      // Build save path for image
+      const savePath = projectDir 
+        ? path.join(projectDir, `scene_${String(scene.scene_id).padStart(2, '0')}_take_${take}.png`)
+        : undefined;
 
-      // Convert image buffer to base64 for vision check
-      const imageBase64 = image.buffer.toString("base64");
+      // Generate image with adaptive steps and random seed
+      const image = await comfyuiGenerate(currentPrompt, {
+        steps,
+        seed,
+        samplerNodeId: "68", // KSampler node ID in z-image turbo workflow
+        savePath,
+      });
 
-      // Vision check
-      const visionResult = await visionCheck(scene, imageBase64);
+      // Vision check (pass buffer directly)
+      const visionResult = await visionCheck(scene, image.buffer);
+
+      // Record this take
+      // Use the saved filename (our naming convention) not ComfyUI's temp filename
+      const savedImagePath = savePath ? path.basename(savePath) : image.filename;
+
+      const takeRecord: Take = {
+        take,
+        steps,
+        seed,
+        prompt: currentPrompt,
+        image_path: savedImagePath,
+        vision_result: visionResult,
+      };
+      takes.push(takeRecord);
 
       if (visionResult.all_pass) {
         // Success!
         const result: SceneWithResult = {
           ...scene,
-          image_path: image.filename,
-          image_base64: imageBase64,
+          original_comfy_prompt: originalPrompt,
+          comfy_prompt: currentPrompt,
+          image_path: savedImagePath,
           take,
+          steps,
+          seed,
           status: "pass",
+          manually_approved: false,
+          takes,
           vision_result: visionResult,
         };
 
@@ -174,7 +215,10 @@ async function processScene(
 
       // Vision check failed
       const failedCriteria = [];
-      if (!visionResult.subject_ok) failedCriteria.push("subject");
+      if (!visionResult.subjects_ok) {
+        const missing = visionResult.missing_subjects.join(", ");
+        failedCriteria.push(`subject (${missing})`);
+      }
       if (!visionResult.mood_ok) failedCriteria.push("mood");
       if (!visionResult.shot_ok) failedCriteria.push("shot");
 
@@ -188,16 +232,22 @@ async function processScene(
           type: "scene_retry",
           scene_id: scene.scene_id,
           take: take + 1,
+          steps: config.stepLadder[Math.min(take, config.stepLadder.length - 1)],
           reason,
         });
       } else {
         // No more retries
         const result: SceneWithResult = {
           ...scene,
-          image_path: image.filename,
-          image_base64: imageBase64,
+          original_comfy_prompt: originalPrompt,
+          comfy_prompt: currentPrompt,
+          image_path: savedImagePath,
           take,
+          steps,
+          seed,
           status: "needs_review",
+          manually_approved: false,
+          takes,
           vision_result: visionResult,
         };
 
@@ -211,6 +261,8 @@ async function processScene(
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const steps = config.stepLadder[Math.min(take - 1, config.stepLadder.length - 1)];
+      const seed = Math.floor(Math.random() * 0xFFFFFFFF);
 
       if (take <= maxRetries) {
         await emit(onEvent, {
@@ -223,10 +275,16 @@ async function processScene(
         // Final attempt failed
         const result: SceneWithResult = {
           ...scene,
+          original_comfy_prompt: originalPrompt,
           take,
+          steps,
+          seed,
           status: "needs_review",
+          manually_approved: false,
+          takes,
           vision_result: {
-            subject_ok: false,
+            subjects_ok: false,
+            missing_subjects: [],
             mood_ok: false,
             shot_ok: false,
             prompt_fix: null,
@@ -248,10 +306,16 @@ async function processScene(
   // Should not reach here, but handle gracefully
   return {
     ...scene,
+    original_comfy_prompt: originalPrompt,
     take: maxRetries + 1,
+    steps: config.stepLadder[config.stepLadder.length - 1],
+    seed: Math.floor(Math.random() * 0xFFFFFFFF),
     status: "needs_review",
+    manually_approved: false,
+    takes,
     vision_result: {
-      subject_ok: false,
+      subjects_ok: false,
+      missing_subjects: [],
       mood_ok: false,
       shot_ok: false,
       prompt_fix: null,

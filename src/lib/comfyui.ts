@@ -80,6 +80,42 @@ export function injectPrompt(
 }
 
 /**
+ * Inject a prompt and steps into the workflow
+ * Sets both the CLIPTextEncode node and KSampler steps
+ */
+export function injectPromptAndSteps(
+  workflow: Record<string, any>,
+  promptNodeId: string,
+  samplerNodeId: string,
+  prompt: string,
+  steps: number,
+  seed?: number
+): Record<string, any> {
+  const cloned = JSON.parse(JSON.stringify(workflow));
+  
+  if (!cloned[promptNodeId]) {
+    throw new Error(`Workflow node "${promptNodeId}" not found`);
+  }
+  
+  if (!cloned[samplerNodeId]) {
+    throw new Error(`Workflow node "${samplerNodeId}" not found`);
+  }
+  
+  // Set the text input for CLIPTextEncode node
+  cloned[promptNodeId].inputs.text = prompt;
+  
+  // Set the steps for KSampler node
+  cloned[samplerNodeId].inputs.steps = steps;
+  
+  // Set the seed for KSampler node if provided
+  if (seed !== undefined) {
+    cloned[samplerNodeId].inputs.seed = seed;
+  }
+  
+  return cloned;
+}
+
+/**
  * Submit a prompt to ComfyUI and return the prompt_id
  */
 export async function comfyuiSubmit(
@@ -207,25 +243,45 @@ export async function comfyuiDownloadImage(
  * Generate an image with ComfyUI
  * High-level function that handles the full workflow:
  * 1. Load workflow
- * 2. Inject prompt
+ * 2. Inject prompt (and optionally steps, seed)
  * 3. Submit to ComfyUI
  * 4. Wait for completion
- * 5. Download result
+ * 5. Download result and optionally save to disk
  */
 export async function comfyuiGenerate(
   prompt: string,
   options?: {
     workflowFile?: string;
     promptNodeId?: string;
+    samplerNodeId?: string;
+    steps?: number;
+    seed?: number;
     outputFilename?: string;
+    savePath?: string; // If provided, save image to this path
   }
 ): Promise<ComfyUIImage> {
   const config = getConfig();
+  const fs = await import("fs");
   
   // Load and inject
   const workflow = await loadWorkflow(options?.workflowFile);
   const nodeId = options?.promptNodeId ?? config.promptNodeId;
-  const injectedWorkflow = injectPrompt(workflow, nodeId, prompt);
+  
+  let injectedWorkflow: Record<string, any>;
+  
+  // If steps provided, use injectPromptAndSteps (need sampler node)
+  if (options?.steps !== undefined && options?.samplerNodeId) {
+    injectedWorkflow = injectPromptAndSteps(
+      workflow,
+      nodeId,
+      options.samplerNodeId,
+      prompt,
+      options.steps,
+      options.seed
+    );
+  } else {
+    injectedWorkflow = injectPrompt(workflow, nodeId, prompt);
+  }
   
   // Submit
   const promptId = await comfyuiSubmit(injectedWorkflow);
@@ -254,6 +310,11 @@ export async function comfyuiGenerate(
     imageInfo.subfolder,
     imageInfo.type
   );
+  
+  // Save to disk if savePath provided
+  if (options?.savePath) {
+    await fs.promises.writeFile(options.savePath, buffer);
+  }
   
   return {
     filename: imageInfo.filename,

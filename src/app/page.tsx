@@ -278,6 +278,79 @@ export default function Home() {
     }
   };
 
+  const handleRegenerate = async (sceneId: number, prompt: string, seed?: number) => {
+    if (!activeProject) return;
+
+    try {
+      const response = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectName: activeProject,
+          sceneId,
+          prompt,
+          seed,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Regeneration failed");
+      }
+
+      const data = await response.json();
+      
+      // Update the scene in the local state
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.scene_id === sceneId ? data.scene : scene
+        )
+      );
+    } catch (error) {
+      console.error("Regenerate error:", error);
+      throw error;
+    }
+  };
+
+  const handleApprove = async (sceneId: number) => {
+    if (!activeProject) return;
+
+    try {
+      const response = await fetch("/api/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectName: activeProject,
+          sceneId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Approval failed");
+      }
+
+      const data = await response.json();
+      
+      // Update the scene in the local state
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.scene_id === sceneId ? data.scene : scene
+        )
+      );
+      
+      // Refresh projects list to update sidebar status
+      loadProjects();
+    } catch (error) {
+      console.error("Approve error:", error);
+      throw error;
+    }
+  };
+
   const passedCount = scenes.filter((s) => s.status === "pass").length;
   const reviewCount = scenes.filter((s) => s.status === "needs_review").length;
 
@@ -351,7 +424,12 @@ export default function Home() {
           {/* Storyboard Grid */}
           {scenes.length > 0 && (
             <section>
-              <StoryboardGrid scenes={scenes} />
+              <StoryboardGrid
+                scenes={scenes}
+                projectName={activeProject || undefined}
+                onRegenerate={handleRegenerate}
+                onApprove={handleApprove}
+              />
             </section>
           )}
 

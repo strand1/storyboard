@@ -3,43 +3,69 @@
 import { cn } from "@/lib/utils";
 import { StatusBadge, type StatusType } from "./StatusBadge";
 
+export interface VisionResult {
+  subjects_ok: boolean;
+  missing_subjects: string[];
+  mood_ok: boolean;
+  shot_ok: boolean;
+  prompt_fix: string | null;
+}
+
+export interface Take {
+  take: number;
+  steps: number;
+  seed: number;
+  prompt: string;
+  image_path: string;
+  vision_result: VisionResult;
+}
+
 export interface Scene {
   scene_id: number;
   description: string;
-  subject: string;
+  subject: string[];  // Array of required subjects
   action: string;
   mood: string;
   shot_type: "wide" | "medium" | "close-up" | "overhead";
+  original_comfy_prompt?: string;
   comfy_prompt: string;
   image_path?: string;
-  image_base64?: string;
   take: number;
+  steps?: number;
+  seed?: number;
   status: StatusType;
-  vision_result?: {
-    subject_ok: boolean;
-    mood_ok: boolean;
-    shot_ok: boolean;
-    prompt_fix: string | null;
-  };
+  manually_approved?: boolean;
+  takes?: Take[];
+  vision_result?: VisionResult;
 }
 
 interface SceneCardProps {
   scene: Scene;
+  projectName?: string;
   className?: string;
+  onClick?: () => void;
 }
 
-export function SceneCard({ scene, className }: SceneCardProps) {
-  const imageUrl = scene.image_base64
-    ? `data:image/png;base64,${scene.image_base64}`
-    : scene.image_path
-    ? `/output/${scene.image_path}`
+export function SceneCard({ scene, projectName, className, onClick }: SceneCardProps) {
+  // Get image path from current take if scene.image_path is not set
+  const imagePath = scene.image_path || 
+    (scene.takes && scene.takes.length > 0 
+      ? scene.takes.find(t => t.take === scene.take)?.image_path 
+      : undefined);
+  
+  const imageUrl = imagePath && projectName
+    ? `/output/projects/${projectName}/${imagePath}`
+    : imagePath
+    ? `/output/${imagePath}`
     : undefined;
 
   return (
     <div
+      onClick={onClick}
       className={cn(
         "group relative bg-card border border-border rounded-lg overflow-hidden",
         "hover:border-accent transition-colors duration-200",
+        onClick ? "cursor-pointer" : "",
         className
       )}
     >
@@ -92,15 +118,20 @@ export function SceneCard({ scene, className }: SceneCardProps) {
           <span className="inline-flex items-center px-2 py-0.5 bg-muted rounded">
             {scene.mood}
           </span>
+          {scene.steps !== undefined && (
+            <span className="inline-flex items-center px-2 py-0.5 bg-muted rounded">
+              {scene.steps} steps
+            </span>
+          )}
         </div>
 
         {/* Vision result (if failed) */}
         {scene.vision_result && scene.status === "needs_review" && (
           <div className="pt-2 border-t border-border">
             <div className="text-xs text-muted-foreground space-y-1">
-              {!scene.vision_result.subject_ok && (
+              {!scene.vision_result.subjects_ok && (
                 <div className="text-red-500 dark:text-red-400">
-                  • Subject check failed
+                  • Missing subjects: {scene.vision_result.missing_subjects?.join(", ") || "unknown"}
                 </div>
               )}
               {!scene.vision_result.mood_ok && (
