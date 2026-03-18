@@ -164,26 +164,30 @@ export async function llamaJson<T>(
 function extractJsonFromResponse(text: string): string {
   // Remove markdown code fences if present
   let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+  cleaned = cleaned.trim();
   
-  // Try to find JSON object FIRST (most common case for single responses)
-  // This must come before array matching to avoid matching nested [] inside objects
+  // Check if response starts with array - if so, try to extract the full array
+  if (cleaned.startsWith('[')) {
+    // First try anchored match (complete array)
+    const anchoredArray = cleaned.match(/^(\[[\s\S]*\])$/);
+    if (anchoredArray) {
+      return anchoredArray[1];
+    }
+    
+    // Try greedy array match (may be truncated)
+    const greedyArray = cleaned.match(/\[[\s\S]*\]/);
+    if (greedyArray) {
+      return greedyArray[0];
+    }
+  }
+  
+  // Try to find JSON object (for single-object responses like vision checks)
+  // Use greedy match to get the complete object
   const objectMatch = cleaned.match(/\{[\s\S]*\}/);
   if (objectMatch) {
     return objectMatch[0];
   }
   
-  // Match top-level arrays (for scene lists) - must start at beginning or after whitespace
-  // Use a more specific pattern that requires content or proper array structure
-  const arrayMatch = cleaned.match(/^\s*(\[[\s\S]*\])\s*$/);
-  if (arrayMatch) {
-    return arrayMatch[1];
-  }
-  
-  // Fallback: try to find any array (but only if it's substantial, not just [])
-  const anyArrayMatch = cleaned.match(/\[[\s\S]{2,}\]/);
-  if (anyArrayMatch) {
-    return anyArrayMatch[0];
-  }
-  
-  return cleaned.trim();
+  // Fallback: return cleaned text
+  return cleaned;
 }
