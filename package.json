@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:services": "tsx src/lib/test-services.ts"
+    "test:services": "tsx src/lib/test-services.ts",
+    "test:orchestrator": "tsx src/lib/test-orchestrator.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.0",

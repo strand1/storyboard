@@ -134,18 +134,22 @@ export async function llamaJson<T>(
     const response = await llamaChat(messages, {
       model: options?.model,
       maxTokens: options?.maxTokens,
-      temperature: 0.1, // Lower temperature for more deterministic JSON
+      temperature: 0.3, // Moderate temperature for balanced output
     });
 
     // Try to extract JSON from response
     const jsonText = extractJsonFromResponse(response.text);
     
     try {
-      return JSON.parse(jsonText) as T;
+      const parsed = JSON.parse(jsonText);
+      return parsed as T;
     } catch (e) {
+      console.error(`JSON parse attempt ${attempt + 1} failed:`, (e as Error).message);
+      console.error(`JSON text (first 200 chars):`, jsonText.slice(0, 200));
+      
       if (attempt === maxRetries) {
         throw new Error(
-          `Failed to parse JSON after ${maxRetries + 1} attempts. Response: ${response.text}`
+          `Failed to parse JSON after ${maxRetries + 1} attempts. Response: ${response.text.slice(0, 500)}`
         );
       }
     }
@@ -158,10 +162,20 @@ export async function llamaJson<T>(
  * Extract JSON from a response that may contain markdown or extra text
  */
 function extractJsonFromResponse(text: string): string {
-  // Try to find JSON array or object
-  const jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
-  if (jsonMatch) {
-    return jsonMatch[0];
+  // Remove markdown code fences if present
+  let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+  
+  // Try to find JSON array or object (greedy match to get complete structure)
+  // Match arrays first (for scene lists), then objects
+  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    return arrayMatch[0];
   }
-  return text;
+  
+  const objectMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    return objectMatch[0];
+  }
+  
+  return cleaned.trim();
 }
